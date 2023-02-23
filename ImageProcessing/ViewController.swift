@@ -7,6 +7,7 @@
 
 import UIKit
 
+import RxCocoa
 import RxSwift
 import SnapKit
 
@@ -52,12 +53,15 @@ final class ViewController: UIViewController {
         return button
     }()
     
+    private let disposeBag = DisposeBag()
+    
     override func viewDidLoad() {
         super.viewDidLoad()
         
         setupViews()
+        connectAction()
     }
-
+    
     private func setupViews() {
         view.addSubview(contentsStackView)
         
@@ -88,6 +92,71 @@ final class ViewController: UIViewController {
     private func setupButtonsStackView() {
         buttonsStackView.addArrangedSubview(blueButton)
         buttonsStackView.addArrangedSubview(redButton)
+    }
+    
+    private func connectAction() {
+        blueButton.rx.tap
+            .withUnretained(self)
+            .subscribe { _ in
+                self.setDownsampledImage()
+            }
+            .disposed(by: disposeBag)
+        
+        redButton.rx.tap
+            .withUnretained(self)
+            .subscribe { _ in
+                self.setImage()
+            }
+            .disposed(by: disposeBag)
+    }
+    
+    private func setDownsampledImage() {
+        let scale = 8
+        
+        guard let imageURL = Bundle.main.url(forResource: "NightView", withExtension: "jpg") else {
+            print("no such url")
+            return
+        }
+        
+        let imageSourceOptions = [kCGImageSourceShouldCache: false] as CFDictionary
+        guard let imageSource = CGImageSourceCreateWithURL(imageURL as CFURL, imageSourceOptions) else {
+            print("failed to create image source")
+            return
+        }
+        
+        let maxDimensionInPixels = 200 * scale
+        let downsampleOptions = [kCGImageSourceCreateThumbnailFromImageAlways: true,
+                                         kCGImageSourceShouldCacheImmediately: true,
+                                   kCGImageSourceCreateThumbnailWithTransform: true,
+                                          kCGImageSourceThumbnailMaxPixelSize: maxDimensionInPixels] as CFDictionary
+        
+        guard let downsampledImage = CGImageSourceCreateThumbnailAtIndex(imageSource, 0, downsampleOptions) else {
+            print("failed to downsample")
+            return
+        }
+        
+        let image = UIImage(cgImage: downsampledImage)
+        
+        DispatchQueue.main.async {
+            self.mainImageView.image = image
+        }
+    }
+    
+    private func setImage() {
+        guard let imageURL = Bundle.main.url(forResource: "NightView", withExtension: "jpg") else {
+            print("no such path")
+            return
+        }
+        
+        guard let data = try? Data(contentsOf: imageURL),
+              let image = UIImage(data: data) else {
+            print("failed to load from path")
+            return
+        }
+        
+        DispatchQueue.main.async {
+            self.mainImageView.image = image
+        }
     }
 }
 
